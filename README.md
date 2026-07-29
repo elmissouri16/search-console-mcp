@@ -36,7 +36,7 @@ new commits and keep your local clone updated.
 ## Prerequisites
 
 - Git
-- Node.js 20 or newer
+- Node.js 22.13 or newer
 - Corepack/pnpm
 - Access to at least one supported Google or Bing property
 

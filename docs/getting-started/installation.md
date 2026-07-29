@@ -9,7 +9,7 @@ published as an npm package.
 ## Prerequisites
 
 - Git
-- Node.js 20 or newer
+- Node.js 22.13 or newer
 - Corepack/pnpm
 - A verified Google Search Console, Bing Webmaster Tools, or GA4 property
 
