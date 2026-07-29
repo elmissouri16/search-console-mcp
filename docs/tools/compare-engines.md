@@ -52,5 +52,5 @@ Try these with your AI agent:
 | `minClicks` | No | Only show results with at least this many clicks |
 
 <Info>
-  You need both a Google and a Bing account connected to use this tool. Run `node dist/index.js accounts list` from the repository to verify.
+  You need both a Google and a Bing account connected to use this tool. Run the pinned repository command with `accounts list` to verify.
 </Info>

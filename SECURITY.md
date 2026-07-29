@@ -58,7 +58,7 @@ Revoke Google access from your Google Account security settings and remove the
 local account with:
 
 ```bash
-node dist/index.js logout ACCOUNT_ID
+npx --yes --package=github:elmissouri16/search-console-mcp#v1.14.2-security.2 search-console-mcp logout ACCOUNT_ID
 ```
 
 Rotate Bing keys and service-account keys at their providers when compromise is

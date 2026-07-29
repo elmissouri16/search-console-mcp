@@ -1,6 +1,6 @@
 {
   "name": "search-console-mcp",
-  "version": "1.14.2-security.1",
+  "version": "1.14.2-security.2",
   "mcpName": "io.github.elmissouri16/search-console-mcp",
   "private": true,
   "description": "MCP server for Google Search Console, Bing Webmaster Tools, and Google Analytics 4",
@@ -24,6 +24,7 @@
   ],
   "scripts": {
     "build": "tsc",
+    "prepare": "npm run build",
     "test": "vitest run",
     "docs": "typedoc"
   },

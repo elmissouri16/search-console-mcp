@@ -1,49 +1,45 @@
 ---
-title: "Installation from the reviewed repository"
-description: "Clone, build, and configure the security-hardened fork."
+title: "Run from the reviewed repository"
+description: "Use npx with a pinned GitHub source tag, without a global install."
 ---
 
-This fork is installed from its Git repository. It is deliberately not
-published as an npm package.
+This fork is not published as an npm package. `npx` can still retrieve and run
+the package directly from its tagged GitHub source.
 
 ## Prerequisites
 
-- Git
 - Node.js 22.13 or newer
-- Corepack/pnpm
+- Git
 - A verified Google Search Console, Bing Webmaster Tools, or GA4 property
 
-## Clone and build
+## One-command setup
 
 ```bash
-git clone https://github.com/elmissouri16/search-console-mcp.git
-cd search-console-mcp
-corepack enable
-corepack pnpm install --frozen-lockfile
-corepack pnpm run build
+npx --yes --package=github:elmissouri16/search-console-mcp#v1.14.2-security.2 search-console-mcp setup
 ```
 
-Run setup from the local build:
+On first use, npm retrieves the tagged repository into its cache, installs the
+dependencies, and runs the repository's `prepare` script to build TypeScript.
+It does not install a global package.
 
-```bash
-node dist/index.js setup
-```
-
-Running `npx search-console-mcp` uses the separately published upstream npm
-package, not this fork.
+Do not shorten this to `npx search-console-mcp`: the bare package name resolves
+the separately published upstream npm package. The GitHub package spec and
+version tag identify this fork and reviewed release.
 
 ## MCP client configuration
 
-The setup wizard prints a configuration for the current checkout. For manual
-configuration, use absolute paths for both Node and the built entry point:
+The setup wizard prints this configuration and includes any authentication
+variables available in its environment:
 
 ```json
 {
   "mcpServers": {
     "search-console": {
-      "command": "/absolute/path/to/node",
+      "command": "npx",
       "args": [
-        "/absolute/path/to/search-console-mcp/dist/index.js"
+        "--yes",
+        "--package=github:elmissouri16/search-console-mcp#v1.14.2-security.2",
+        "search-console-mcp"
       ],
       "env": {
         "GOOGLE_CLIENT_ID": "your-own-desktop-oauth-client-id",
@@ -56,33 +52,34 @@ configuration, use absolute paths for both Node and the built entry point:
 }
 ```
 
-Use `command -v node` to locate Node. Replace the repository path with the
-actual clone location.
+Treat MCP configuration containing credentials as a secret.
 
 ## Verify
 
 ```bash
-corepack pnpm test
-corepack pnpm run build
-node dist/index.js accounts list
+npx --yes --package=github:elmissouri16/search-console-mcp#v1.14.2-security.2 search-console-mcp accounts list
 ```
 
-## Updating
+## Reproducible source checkout
 
-Updates are manual so you can inspect them first:
+`npx` is the convenient path, but npm resolves the Git package's dependency
+installation itself. For a lockfile-enforced local review, clone the tag and use
+pnpm:
 
 ```bash
-cd /absolute/path/to/search-console-mcp
-git fetch origin
-git log --oneline HEAD..origin/main
-git pull --ff-only
+git clone --branch v1.14.2-security.2 https://github.com/elmissouri16/search-console-mcp.git
+cd search-console-mcp
+corepack enable
 corepack pnpm install --frozen-lockfile
 corepack pnpm run build
 corepack pnpm test
 ```
 
-The application does not perform background version checks or automatic
-installation.
+## Updating
+
+Review the comparison between your pinned tag and a newer release tag, then
+replace the tag in the command and MCP configuration. The application performs
+no background version checks or automatic updates.
 
 ## Next steps
 

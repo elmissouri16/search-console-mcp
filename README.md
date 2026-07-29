@@ -8,8 +8,8 @@ This is a security-hardened fork of
 It connects MCP clients to Google Search Console, Bing Webmaster Tools, Google
 Analytics 4, PageSpeed Insights, and related SEO analysis tools.
 
-This fork is intentionally installed from source. It is not published to npm
-and does not silently replace an npm package or auto-update itself.
+This fork runs directly from its GitHub source. It is not published to npm and
+does not silently replace an npm package or auto-update itself.
 
 ## Security changes in this fork
 
@@ -35,40 +35,35 @@ new commits and keep your local clone updated.
 
 ## Prerequisites
 
-- Git
 - Node.js 22.13 or newer
-- Corepack/pnpm
+- Git, which npm uses to retrieve the tagged repository
 - Access to at least one supported Google or Bing property
 
-## Install from this repository
+## Run directly from this repository
 
 ```bash
-git clone https://github.com/elmissouri16/search-console-mcp.git
-cd search-console-mcp
-corepack enable
-corepack pnpm install --frozen-lockfile
-corepack pnpm run build
+npx --yes --package=github:elmissouri16/search-console-mcp#v1.14.2-security.2 search-console-mcp setup
 ```
 
-Run the setup wizard from the checked-out build:
+This retrieves the tagged source into npm's cache, installs its dependencies,
+builds TypeScript through the repository's `prepare` hook, and runs the setup
+wizard. Nothing is installed globally.
 
-```bash
-node dist/index.js setup
-```
-
-The wizard prints an MCP configuration that runs this exact local checkout.
+The wizard prints an MCP configuration that invokes this same pinned GitHub tag.
 If authentication variables are present, the snippet includes them because a
 GUI-launched MCP server may not inherit your terminal environment. Treat that
 client configuration as a secret.
-When configuring a client manually, use absolute paths:
+The equivalent manual configuration is:
 
 ```json
 {
   "mcpServers": {
     "search-console": {
-      "command": "/absolute/path/to/node",
+      "command": "npx",
       "args": [
-        "/absolute/path/to/search-console-mcp/dist/index.js"
+        "--yes",
+        "--package=github:elmissouri16/search-console-mcp#v1.14.2-security.2",
+        "search-console-mcp"
       ],
       "env": {
         "GOOGLE_CLIENT_ID": "your-own-desktop-oauth-client-id",
@@ -80,9 +75,20 @@ When configuring a client manually, use absolute paths:
 }
 ```
 
-Find the Node executable with `command -v node`. Do not point your client at
-`npx search-console-mcp`; that runs the npm release rather than this reviewed
-fork.
+Do not use bare `npx search-console-mcp`; that resolves the unrelated npm
+release. Keep the `--package=github:...#v1.14.2-security.2` argument. Pinning the
+tag avoids silently following new commits on `main`.
+
+For the most reproducible review path, you can still clone the repository and
+use the committed pnpm lockfile:
+
+```bash
+git clone --branch v1.14.2-security.2 https://github.com/elmissouri16/search-console-mcp.git
+cd search-console-mcp
+corepack enable
+corepack pnpm install --frozen-lockfile
+corepack pnpm run build
+```
 
 ## Authentication
 
@@ -94,7 +100,7 @@ required APIs, then set:
 ```bash
 export GOOGLE_CLIENT_ID="your-client-id"
 export GOOGLE_CLIENT_SECRET="your-client-secret"
-node dist/index.js setup
+npx --yes --package=github:elmissouri16/search-console-mcp#v1.14.2-security.2 search-console-mcp setup
 ```
 
 OAuth secrets are saved to macOS Keychain, Windows Credential Manager, or Linux
@@ -108,15 +114,15 @@ to the relevant property and set:
 
 ```bash
 export GOOGLE_APPLICATION_CREDENTIALS="/absolute/path/to/service-account.json"
-node dist/index.js setup
+npx --yes --package=github:elmissouri16/search-console-mcp#v1.14.2-security.2 search-console-mcp setup
 ```
 
 Protect the JSON key as a secret and restrict its filesystem permissions.
 
 ### Bing Webmaster Tools
 
-Run `node dist/index.js setup`, choose Bing, and enter the API key when
-prompted. The key is saved only in the OS keychain. `BING_API_KEY` remains
+Run the tagged `npx` setup command above, choose Bing, and enter the API key
+when prompted. The key is saved only in the OS keychain. `BING_API_KEY` remains
 available as an explicit environment-only option.
 
 ## Write-tool opt-in
@@ -132,27 +138,21 @@ Enabling the flag exposes write capability; your MCP client should still ask
 you to approve each specific operation. Leave it unset or set it to `false`
 when you only need analysis.
 
-## Common local commands
+## Common commands
 
 ```bash
 # List configured accounts
-node dist/index.js accounts list
+npx --yes --package=github:elmissouri16/search-console-mcp#v1.14.2-security.2 search-console-mcp accounts list
 
 # Show CLI tool help
-node dist/index.js run --help
+npx --yes --package=github:elmissouri16/search-console-mcp#v1.14.2-security.2 search-console-mcp run --help
 
 # Run a read-only tool
-node dist/index.js run sites_list --engine=google --format=table
-
-# Pull reviewed upstream changes and rebuild
-git pull --ff-only
-corepack pnpm install --frozen-lockfile
-corepack pnpm run build
-corepack pnpm test
+npx --yes --package=github:elmissouri16/search-console-mcp#v1.14.2-security.2 search-console-mcp run sites_list --engine=google --format=table
 ```
 
-The `update` command prints these manual instructions; it does not download or
-install anything.
+To update, review a newer fork tag and replace the pinned tag in the command and
+MCP configuration. The application itself performs no background update.
 
 ## Verification
 

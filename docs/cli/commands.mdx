@@ -16,21 +16,21 @@ Starts the interactive configuration wizard to connect your Google Search Consol
 * **What it does:** Opens a browser window for secure OAuth authorization and saves credentials.
 * **Usage:**
   ```bash
-  node dist/index.js setup
+  npx --yes --package=github:elmissouri16/search-console-mcp#v1.14.2-security.2 search-console-mcp setup
   ```
 
 ### `login`
 Triggers the OAuth login flow specifically to authorize a new account.
 * **Usage:**
   ```bash
-  node dist/index.js login
+  npx --yes --package=github:elmissouri16/search-console-mcp#v1.14.2-security.2 search-console-mcp login
   ```
 
 ### `logout`
 Revokes active OAuth tokens and logs out from all connected Google accounts.
 * **Usage:**
   ```bash
-  node dist/index.js logout ACCOUNT_ID
+  npx --yes --package=github:elmissouri16/search-console-mcp#v1.14.2-security.2 search-console-mcp logout ACCOUNT_ID
   ```
 
 ### `accounts`
@@ -41,29 +41,29 @@ Manages connected search engine accounts.
   * `remove`: Remove a connected account.
 * **Usage:**
   ```bash
-  node dist/index.js accounts list
-  node dist/index.js accounts remove --account=user@company.com
+  npx --yes --package=github:elmissouri16/search-console-mcp#v1.14.2-security.2 search-console-mcp accounts list
+  npx --yes --package=github:elmissouri16/search-console-mcp#v1.14.2-security.2 search-console-mcp accounts remove --account=user@company.com
   ```
 
 ### `sites`
 A quick shortcut to display all verified sites across all connected accounts.
 * **Usage:**
   ```bash
-  node dist/index.js sites
+  npx --yes --package=github:elmissouri16/search-console-mcp#v1.14.2-security.2 search-console-mcp sites
   ```
 
 ### `diagnostics`
 Runs diagnostic checks to troubleshoot connection errors, quota limits, and API authorization status.
 * **Usage:**
   ```bash
-  node dist/index.js diagnostics
+  npx --yes --package=github:elmissouri16/search-console-mcp#v1.14.2-security.2 search-console-mcp diagnostics
   ```
 
 ### `update`
 Prints manual repository update instructions. It does not fetch or install code.
 * **Usage:**
   ```bash
-  node dist/index.js update
+  npx --yes --package=github:elmissouri16/search-console-mcp#v1.14.2-security.2 search-console-mcp update
   ```
 
 ---
@@ -74,7 +74,7 @@ The `run` subcommand lets you execute any registered MCP tool.
 
 ### Syntax
 ```bash
-node dist/index.js run <tool_name> [options] [--format=json|csv|table]
+npx --yes --package=github:elmissouri16/search-console-mcp#v1.14.2-security.2 search-console-mcp run <tool_name> [options] [--format=json|csv|table]
 ```
 
 ### Passing Arguments
@@ -88,20 +88,20 @@ Boolean flags can be toggled on by passing `--flag` or turned off using `--no-fl
 Renders tool outputs in your preferred layout:
 ```bash
 # Print as CSV
-node dist/index.js run sites_list --engine=google --format=csv
+npx --yes --package=github:elmissouri16/search-console-mcp#v1.14.2-security.2 search-console-mcp run sites_list --engine=google --format=csv
 
 # Print as a clean ASCII table
-node dist/index.js run seo_striking_distance --siteUrl=https://example.com --format=table
+npx --yes --package=github:elmissouri16/search-console-mcp#v1.14.2-security.2 search-console-mcp run seo_striking_distance --siteUrl=https://example.com --format=table
 ```
 
 ### Finding Tool Names & Options
 You can list all available tools or inspect options for a single tool by appending `--help`:
 ```bash
 # List all executable tools
-node dist/index.js run --help
+npx --yes --package=github:elmissouri16/search-console-mcp#v1.14.2-security.2 search-console-mcp run --help
 
 # Show arguments for a specific tool
-node dist/index.js run analytics_query --help
+npx --yes --package=github:elmissouri16/search-console-mcp#v1.14.2-security.2 search-console-mcp run analytics_query --help
 ```
 
 To see the detailed schemas and metrics returned by each tool, refer to the **Tools** section in the **MCP Server** tab.

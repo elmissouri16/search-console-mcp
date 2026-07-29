@@ -212,12 +212,25 @@ export function showMcpConfigSnippet() {
     }
     if (process.env.PAGESPEED_API_KEY) env.PAGESPEED_API_KEY = process.env.PAGESPEED_API_KEY;
 
+    let packageVersion = '1.14.2-security.2';
+    try {
+        const packageJson = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf8'));
+        if (typeof packageJson.version === 'string') packageVersion = packageJson.version;
+    } catch {
+        // Keep the release fallback when package metadata cannot be read.
+    }
+    const repositoryPackage = `github:elmissouri16/search-console-mcp#v${packageVersion}`;
+
     console.log('\nAdd this to your MCP client configuration:\n');
     console.log(JSON.stringify({
         mcpServers: {
             "search-console": {
-                command: process.execPath,
-                args: [join(__dirname, "index.js")],
+                command: "npx",
+                args: [
+                    "--yes",
+                    `--package=${repositoryPackage}`,
+                    "search-console-mcp"
+                ],
                 env
             }
         }

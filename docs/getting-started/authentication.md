@@ -25,7 +25,7 @@ API, and supply your own client values:
 ```bash
 export GOOGLE_CLIENT_ID="your-desktop-client-id"
 export GOOGLE_CLIENT_SECRET="your-desktop-client-secret"
-node dist/index.js setup
+npx --yes --package=github:elmissouri16/search-console-mcp#v1.14.2-security.2 search-console-mcp setup
 ```
 
 The browser authorization callback:
@@ -41,10 +41,10 @@ their separate indexing scope and are write-gated by this fork.
 Remove a configured account and its keychain credentials with:
 
 ```bash
-node dist/index.js logout ACCOUNT_ID
+npx --yes --package=github:elmissouri16/search-console-mcp#v1.14.2-security.2 search-console-mcp logout ACCOUNT_ID
 ```
 
-Use `node dist/index.js accounts list` to find the account ID.
+Use the tagged repository command with `accounts list` to find the account ID.
 
 ## Google service account
 
@@ -59,7 +59,7 @@ Service accounts are suitable for servers or dedicated automation:
 
 ```bash
 export GOOGLE_APPLICATION_CREDENTIALS="/absolute/path/to/service-account.json"
-node dist/index.js setup
+npx --yes --package=github:elmissouri16/search-console-mcp#v1.14.2-security.2 search-console-mcp setup
 ```
 
 Environment-based `GOOGLE_CLIENT_EMAIL` and `GOOGLE_PRIVATE_KEY` credentials
@@ -70,7 +70,7 @@ are also supported for managed deployment environments.
 Run the local setup wizard and choose Bing:
 
 ```bash
-node dist/index.js setup
+npx --yes --package=github:elmissouri16/search-console-mcp#v1.14.2-security.2 search-console-mcp setup
 ```
 
 The entered API key is saved to the OS keychain. Alternatively, pass
@@ -82,7 +82,7 @@ are not copied into the keychain automatically.
 Run:
 
 ```bash
-node dist/index.js setup --engine=ga4
+npx --yes --package=github:elmissouri16/search-console-mcp#v1.14.2-security.2 search-console-mcp setup --engine=ga4
 ```
 
 GA4 supports a service-account JSON file or your own Google OAuth Desktop

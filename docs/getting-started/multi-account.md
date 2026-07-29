@@ -22,7 +22,7 @@ Common setups include:
 Run the setup wizard for each account you want to add:
 
 ```bash
-node dist/index.js setup
+npx --yes --package=github:elmissouri16/search-console-mcp#v1.14.2-security.2 search-console-mcp setup
 ```
 
 Choose Google or Bing, complete the login, and give the account a name. Repeat for each account.
