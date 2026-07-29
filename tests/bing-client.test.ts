@@ -6,10 +6,21 @@ import * as resolverModule from '../src/common/auth/resolver.js';
 // Mock dependencies
 vi.mock('../src/common/auth/config.js', () => ({
     loadConfig: vi.fn(),
+    updateAccount: vi.fn(),
 }));
 
 vi.mock('../src/common/auth/resolver.js', () => ({
     resolveAccount: vi.fn(),
+}));
+
+const { mockReadCredential, mockWriteCredential } = vi.hoisted(() => ({
+    mockReadCredential: vi.fn(),
+    mockWriteCredential: vi.fn(),
+}));
+
+vi.mock('../src/common/auth/credential-store.js', () => ({
+    readCredential: mockReadCredential,
+    writeCredential: mockWriteCredential,
 }));
 
 const fetchMock = vi.fn();
@@ -19,6 +30,8 @@ describe('Bing Client', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         fetchMock.mockReset();
+        mockReadCredential.mockReset().mockResolvedValue(null);
+        mockWriteCredential.mockReset().mockResolvedValue(undefined);
     });
 
     describe('BingClient Class', () => {

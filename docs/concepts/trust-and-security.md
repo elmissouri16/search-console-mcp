@@ -1,34 +1,44 @@
 ---
 title: "Trust and Security"
-description: "Safe automation for your most valuable data."
+description: "The security boundaries and explicit opt-ins in this fork."
 ---
 
-Search Console data is sensitive. It reveals exactly what keywords your business depends on. We designed this MCP server with a "security-first" mindset.
+Search Console and analytics data can reveal commercially sensitive queries,
+pages, and traffic patterns. Treat this MCP server as code running with the
+permissions of the connected accounts.
 
-## Secure Token Storage
+## Default boundaries
 
-We treat your Google credentials with the highest level of security available on your operating system.
+- OAuth refresh tokens and Bing API keys are keychain-only.
+- The bundled Google OAuth client was removed; you provide your own.
+- Remote write tools are disabled unless
+  `SEARCH_CONSOLE_MCP_ENABLE_WRITE_TOOLS=true`.
+- The server does not edit site HTML, a CMS, or DNS.
+- There is no telemetry backend, automatic package installation, automatic
+  GitHub starring, or system-like notice injected into tool output.
+- URL-based schema validation accepts public HTTPS destinations only and
+  applies redirect, network, response-size, and timeout restrictions.
 
-*   **System Keychain:** Access tokens and refresh tokens are stored primarily in your OS's native credential manager (macOS Keychain, Windows Credential Manager, Linux Secret Service).
-*   **Hardware-Bound Encryption:** If keychain storage is unavailable, tokens are encrypted using **AES-256-GCM** with a key derived from your unique hardware machine ID. This means sophisticated malware or attackers cannot simply steal the file and use it elsewhere.
-*   **Minimal Footprint:** We only store the `refresh_token` and `expiry_date`. No other personal information is persisted.
+## What the controls do not guarantee
 
-## Explainability Over Everything
+The server sends query and property data directly to the APIs and URLs required
+by the tool you invoke. Your MCP client and language-model provider may receive
+tool inputs and outputs. Review their retention and privacy settings.
 
-We believe agents should be able to explain *how* they reached a conclusion.
-*   **Tool Proofs:** Advanced tools don't just say "Fix this." They provide the supporting data (clicks, benchmarks, thresholds) so you can verify the logic.
-*   **No Black Boxes:** The intelligence tools are open-source. You can see exactly how a "cannibalization conflict" score is calculated in our SEO engine.
+An attacker controlling your operating-system account may be able to use the
+keychain, read process memory, replace the local build, or alter MCP
+configuration. Keychain storage does not protect a fully compromised machine.
 
-## Boundary Defenses
+Dependencies can acquire new vulnerabilities. Review lockfile changes, run the
+test suite and dependency audit, and pull updates manually.
 
-The MCP server is explicitly built **NOT** to do certain things:
-*   **No Auto-Writing:** It does not generate content for your site. This prevents low-quality "AI slop" from being pushed to your pages.
-*   **No Direct Site Editing:** It cannot change your HTML, CMS, or DNS settings.
-*   **No Credential Leakage:** The server is designed to prevent leaking your service account email or project ID to the model unless explicitly required.
+## Safe operating practices
 
-## Your Responsibilities
-
-While the server is secure, you are responsible for:
-1.  **Protecting your machine access.** Your tokens are encrypted with your machine ID, so physical access or remote execution on your specific machine is required to decrypt them.
-2.  **Reviewing Access.** Regularly check [Google Account Permissions](https://myaccount.google.com/permissions) to see which apps have access to your data.
-3.  **Prompt Oversight.** Always review the agent's findings before making significant business decisions.
+1. Use a dedicated service account where practical and grant only the
+   properties it needs.
+2. Keep write tools disabled for analysis-only use.
+3. Inspect tool arguments before approving a write.
+4. Use absolute executable and repository paths in MCP configuration.
+5. Protect service-account files and `.env` with user-only permissions.
+6. Revoke OAuth access and remove local credentials when they are no longer
+   needed.

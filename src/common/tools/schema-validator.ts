@@ -1,6 +1,7 @@
 // @ts-ignore
 import Validator from '@adobe/structured-data-validator';
 import * as cheerio from 'cheerio';
+import { fetchPublicHtml } from '../utils/safe-fetch.js';
 
 /**
  * Result of a structured data (schema) validation check.
@@ -31,11 +32,7 @@ export async function validateSchema(
     try {
         if (type === 'url') {
             try {
-                const response = await fetch(input);
-                if (!response.ok) {
-                    throw new Error(`Failed to fetch URL: ${response.status} ${response.statusText}`);
-                }
-                const html = await response.text();
+                const html = await fetchPublicHtml(input);
                 schemas = extractSchemas(html);
             } catch (e: any) {
                 return { valid: false, errors: [`Fetch error: ${e.message}`], schemas: [] };

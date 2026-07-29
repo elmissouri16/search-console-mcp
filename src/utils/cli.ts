@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { jsonToCsv } from "../common/utils/csv.js";
+import { isWriteAccessEnabled, isWriteTool, writeAccessError } from "../common/write-access.js";
 
 export interface ToolDefinition {
   name: string;
@@ -18,27 +19,13 @@ export type McpToolRegistrar = (
   handler: (args: any) => Promise<any>
 ) => void;
 
-export function createToolRegistrar(server: { tool: McpToolRegistrar }, currentVersion = "1.0.0"): McpToolRegistrar {
+export function createToolRegistrar(server: { tool: McpToolRegistrar }): McpToolRegistrar {
   return (name, description, schemaShape, handler) => {
     const wrappedHandler = async (args: any) => {
-      const res = await handler(args);
-      if (!isCliRun() && res && Array.isArray(res.content)) {
-        try {
-          const { getAgentUpdateNotice } = await import("./update.js");
-          const notice = await getAgentUpdateNotice(currentVersion);
-          if (notice) {
-            const textItem = res.content.find((item: any) => item?.type === "text");
-            if (textItem && typeof textItem.text === "string") {
-              textItem.text += notice;
-            } else {
-              res.content.push({ type: "text", text: notice });
-            }
-          }
-        } catch {
-          // Ignore
-        }
+      if (isWriteTool(name) && !isWriteAccessEnabled()) {
+        return writeAccessError(name);
       }
-      return res;
+      return handler(args);
     };
 
     toolsRegistry.set(name, {

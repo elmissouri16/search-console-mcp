@@ -1,22 +1,39 @@
 import { google, searchconsole_v1 } from 'googleapis';
-import nodeMachineId from 'node-machine-id';
-import { AccountConfig, loadConfig, saveConfig, updateAccount, removeAccount } from '../common/auth/config.js';
+import {
+  AccountConfig,
+  cleanupMigratedLegacyTokenFiles,
+  loadConfig,
+  updateAccount,
+  removeAccount
+} from '../common/auth/config.js';
 import { resolveAccount } from '../common/auth/resolver.js';
+import { readCredential, writeCredential } from '../common/auth/credential-store.js';
 import { logger } from '../utils/logger.js';
-const { machineIdSync } = nodeMachineId;
+import { randomBytes, timingSafeEqual } from 'crypto';
 
 const SCOPES = [
   'https://www.googleapis.com/auth/webmasters.readonly',
   'https://www.googleapis.com/auth/userinfo.email'
 ];
-const SERVICE_NAME = 'io.github.saurabhsharma2u.search-console-mcp';
 const DEFAULT_ACCOUNT = 'default';
 
-// Default Client ID for Desktop Flow
-export const DEFAULT_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '347626597503-dr6t24m0i3g1nl1suam86rs650t3fhau.apps.googleusercontent.com';
-export const DEFAULT_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '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';
+// Fork builds require a user-controlled Google OAuth desktop application.
+export const DEFAULT_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
+export const DEFAULT_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
 
 // Encryption logic moved to src/common/auth/config.ts
+
+function oauthClientCredentials() {
+  const clientId = process.env.GOOGLE_CLIENT_ID || DEFAULT_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET || DEFAULT_CLIENT_SECRET;
+  if (!clientId || !clientSecret) {
+    throw new Error(
+      'OAuth requires your own Google Desktop client. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET, ' +
+      'or use a service account.'
+    );
+  }
+  return { clientId, clientSecret };
+}
 
 let cachedClientMap: Record<string, searchconsole_v1.Searchconsole> = {};
 
@@ -47,9 +64,10 @@ export async function getSearchConsoleClient(siteUrl?: string, accountId?: strin
 
   if (tokens) {
     try {
+      const { clientId, clientSecret } = oauthClientCredentials();
       const oauth2Client = new google.auth.OAuth2(
-        process.env.GOOGLE_CLIENT_ID || DEFAULT_CLIENT_ID,
-        process.env.GOOGLE_CLIENT_SECRET || DEFAULT_CLIENT_SECRET
+        clientId,
+        clientSecret
       );
       oauth2Client.setCredentials(tokens);
 
@@ -146,9 +164,10 @@ export async function getIndexingClient(siteUrl?: string, accountId?: string): P
 
   if (tokens) {
     try {
+      const { clientId, clientSecret } = oauthClientCredentials();
       const oauth2Client = new google.auth.OAuth2(
-        process.env.GOOGLE_CLIENT_ID || DEFAULT_CLIENT_ID,
-        process.env.GOOGLE_CLIENT_SECRET || DEFAULT_CLIENT_SECRET
+        clientId,
+        clientSecret
       );
       oauth2Client.setCredentials(tokens);
 
@@ -205,9 +224,10 @@ export async function getIndexingClient(siteUrl?: string, accountId?: string): P
 }
 
 export async function getUserEmail(tokens: any): Promise<string> {
+  const { clientId, clientSecret } = oauthClientCredentials();
   const oauth2Client = new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID || DEFAULT_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET || DEFAULT_CLIENT_SECRET
+    clientId,
+    clientSecret
   );
   oauth2Client.setCredentials(tokens);
   const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
@@ -216,54 +236,73 @@ export async function getUserEmail(tokens: any): Promise<string> {
 }
 
 export async function loadTokensForAccount(account: AccountConfig): Promise<any> {
-  // 1. Try Keychain (using alias/email as key for backward compatibility if it's an email)
-  const target = account.alias;
   try {
-    const { Entry } = await import('@napi-rs/keyring');
-    const entry = new Entry(SERVICE_NAME, target);
-    const secret = await entry.getPassword();
+    const secret = await readCredential(account, 'google-oauth');
     if (secret) {
       return JSON.parse(secret);
     }
-  } catch (e) { }
+  } catch (error) {
+    if (!account.tokens) {
+      logger.debug(`OS keychain unavailable for ${account.alias}: ${(error as Error).message}`);
+      return null;
+    }
+  }
 
-  // 2. Fallback to tokens stored in account config
-  return account.tokens || null;
+  // One-time, fail-closed migration from upstream encrypted config storage.
+  if (account.tokens?.refresh_token) {
+    const migratedTokens = {
+      refresh_token: account.tokens.refresh_token,
+      expiry_date: account.tokens.expiry_date,
+    };
+    try {
+      await writeCredential(account, 'google-oauth', JSON.stringify(migratedTokens));
+      delete account.tokens;
+      await updateAccount(account);
+      await cleanupMigratedLegacyTokenFiles();
+      return migratedTokens;
+    } catch (error) {
+      throw new Error(
+        `OAuth credentials for ${account.alias} could not be migrated to the OS keychain. ` +
+        `Configure a working keychain or use a service account. Cause: ${(error as Error).message}`
+      );
+    }
+  }
+
+  return null;
 }
 
 export async function saveTokensForAccount(account: AccountConfig, tokens: any) {
+  let existingTokens: any = null;
+  try {
+    const existing = await readCredential(account, 'google-oauth');
+    existingTokens = existing ? JSON.parse(existing) : null;
+  } catch {
+    // The write below produces the actionable keychain error.
+  }
+
   const minimalTokens = {
-    refresh_token: tokens.refresh_token || account.tokens?.refresh_token,
-    expiry_date: tokens.expiry_date,
-    access_token: tokens.access_token
+    refresh_token: tokens.refresh_token || existingTokens?.refresh_token || account.tokens?.refresh_token,
+    expiry_date: tokens.expiry_date
   };
 
-  // Update account in config
-  account.tokens = minimalTokens;
-  await updateAccount(account);
+  if (!minimalTokens.refresh_token) {
+    throw new Error('Google did not return a refresh token. Re-authorize with consent or use a service account.');
+  }
 
-  // Sync to keychain
-  const target = account.alias;
   try {
-    const { Entry } = await import('@napi-rs/keyring');
-    const entry = new Entry(SERVICE_NAME, target);
-    await entry.setPassword(JSON.stringify(minimalTokens));
-  } catch (e) { }
+    await writeCredential(account, 'google-oauth', JSON.stringify(minimalTokens));
+  } catch (error) {
+    throw new Error(
+      `Could not store OAuth credentials in the OS keychain. ` +
+      `No file fallback was written. Cause: ${(error as Error).message}`
+    );
+  }
+
+  delete account.tokens;
+  await updateAccount(account);
 }
 
 export async function logout(accountId: string) {
-  const config = await loadConfig();
-  const account = config.accounts[accountId];
-  if (!account) return;
-
-  // 1. Try Keychain
-  try {
-    const { Entry } = await import('@napi-rs/keyring');
-    const entry = new Entry(SERVICE_NAME, account.alias);
-    await entry.deletePassword();
-  } catch (e) { }
-
-  // 2. Remove from config
   await removeAccount(accountId);
 }
 
@@ -299,41 +338,75 @@ export async function pollForTokens(clientId: string, clientSecret: string, devi
 }
 
 export async function startLocalFlow(clientId: string, clientSecret: string, scopes: string[] = SCOPES): Promise<any> {
+  if (!clientId || !clientSecret) {
+    throw new Error(
+      'OAuth requires GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET from your own Google Desktop application.'
+    );
+  }
   const { createServer } = await import('http');
   const { google } = await import('googleapis');
   const open = (await import('open')).default;
 
-  const REDIRECT_URI = 'http://localhost:3000/oauth2callback';
+  const REDIRECT_URI = 'http://127.0.0.1:3000/oauth2callback';
   const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, REDIRECT_URI);
+  const state = randomBytes(32).toString('hex');
 
   const authUrl = oauth2Client.generateAuthUrl({
     access_type: 'offline',
     scope: scopes,
-    prompt: 'consent'
+    prompt: 'consent',
+    state
   });
 
   return new Promise((resolve, reject) => {
+    let timeout: ReturnType<typeof setTimeout>;
+
     const server = createServer(async (req, res) => {
       try {
         if (req.url?.startsWith('/oauth2callback')) {
-          const url = new URL(req.url, `http://${req.headers.host}`);
+          const url = new URL(req.url, REDIRECT_URI);
+          const returnedState = url.searchParams.get('state');
           const code = url.searchParams.get('code');
+          const oauthError = url.searchParams.get('error');
+
+          const expected = Buffer.from(state);
+          const received = Buffer.from(returnedState || '');
+          if (expected.length !== received.length || !timingSafeEqual(expected, received)) {
+            res.writeHead(400, { 'Content-Type': 'text/html' });
+            res.end('<h1>Authentication Failed</h1><p>Invalid OAuth state.</p>');
+            return;
+          }
+
+          if (oauthError) {
+            throw new Error(`Google authorization failed: ${oauthError}`);
+          }
 
           if (code) {
             const { tokens } = await oauth2Client.getToken(code);
             res.writeHead(200, { 'Content-Type': 'text/html' });
             res.end('<h1>Authentication Successful!</h1><p>You can close this tab now and return to your terminal.</p>');
+            clearTimeout(timeout);
             server.close();
             resolve(tokens);
+            return;
           }
+
+          res.writeHead(400, { 'Content-Type': 'text/html' });
+          res.end('<h1>Authentication Failed</h1><p>Authorization code is missing.</p>');
         }
       } catch (e) {
         res.writeHead(500);
         res.end('<h1>Authentication Failed</h1>');
+        clearTimeout(timeout);
         server.close();
         reject(e);
       }
-    }).listen(3000);
+    }).listen(3000, '127.0.0.1');
+
+    timeout = setTimeout(() => {
+      server.close();
+      reject(new Error('OAuth authorization timed out after 5 minutes.'));
+    }, 5 * 60 * 1000);
 
     console.log('\nOpening your browser to authorize Search Console access...');
     open(authUrl);

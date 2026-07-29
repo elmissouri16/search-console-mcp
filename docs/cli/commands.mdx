@@ -16,21 +16,21 @@ Starts the interactive configuration wizard to connect your Google Search Consol
 * **What it does:** Opens a browser window for secure OAuth authorization and saves credentials.
 * **Usage:**
   ```bash
-  npx search-console-mcp setup
+  node dist/index.js setup
   ```
 
 ### `login`
 Triggers the OAuth login flow specifically to authorize a new account.
 * **Usage:**
   ```bash
-  npx search-console-mcp login
+  node dist/index.js login
   ```
 
 ### `logout`
 Revokes active OAuth tokens and logs out from all connected Google accounts.
 * **Usage:**
   ```bash
-  npx search-console-mcp logout
+  node dist/index.js logout ACCOUNT_ID
   ```
 
 ### `accounts`
@@ -41,29 +41,29 @@ Manages connected search engine accounts.
   * `remove`: Remove a connected account.
 * **Usage:**
   ```bash
-  npx search-console-mcp accounts list
-  npx search-console-mcp accounts remove --account=user@company.com
+  node dist/index.js accounts list
+  node dist/index.js accounts remove --account=user@company.com
   ```
 
 ### `sites`
 A quick shortcut to display all verified sites across all connected accounts.
 * **Usage:**
   ```bash
-  npx search-console-mcp sites
+  node dist/index.js sites
   ```
 
 ### `diagnostics`
 Runs diagnostic checks to troubleshoot connection errors, quota limits, and API authorization status.
 * **Usage:**
   ```bash
-  npx search-console-mcp diagnostics
+  node dist/index.js diagnostics
   ```
 
 ### `update`
-Triggers an automated check and updates the `search-console-mcp` package to the latest version.
+Prints manual repository update instructions. It does not fetch or install code.
 * **Usage:**
   ```bash
-  npx search-console-mcp update
+  node dist/index.js update
   ```
 
 ---
@@ -74,7 +74,7 @@ The `run` subcommand lets you execute any registered MCP tool.
 
 ### Syntax
 ```bash
-npx search-console-mcp run <tool_name> [options] [--format=json|csv|table]
+node dist/index.js run <tool_name> [options] [--format=json|csv|table]
 ```
 
 ### Passing Arguments
@@ -88,20 +88,20 @@ Boolean flags can be toggled on by passing `--flag` or turned off using `--no-fl
 Renders tool outputs in your preferred layout:
 ```bash
 # Print as CSV
-npx search-console-mcp run sites_list --engine=google --format=csv
+node dist/index.js run sites_list --engine=google --format=csv
 
 # Print as a clean ASCII table
-npx search-console-mcp run seo_striking_distance --siteUrl=https://example.com --format=table
+node dist/index.js run seo_striking_distance --siteUrl=https://example.com --format=table
 ```
 
 ### Finding Tool Names & Options
 You can list all available tools or inspect options for a single tool by appending `--help`:
 ```bash
 # List all executable tools
-npx search-console-mcp run --help
+node dist/index.js run --help
 
 # Show arguments for a specific tool
-npx search-console-mcp run analytics_query --help
+node dist/index.js run analytics_query --help
 ```
 
 To see the detailed schemas and metrics returned by each tool, refer to the **Tools** section in the **MCP Server** tab.

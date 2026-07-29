@@ -7,11 +7,22 @@ import * as resolverModule from '../src/common/auth/resolver.js';
 vi.mock('../src/common/auth/config.js', () => ({
     loadConfig: vi.fn(),
     updateAccount: vi.fn(),
-    saveTokensForAccount: vi.fn(),
+    removeAccount: vi.fn(),
+    cleanupMigratedLegacyTokenFiles: vi.fn(),
 }));
 
 vi.mock('../src/common/auth/resolver.js', () => ({
     resolveAccount: vi.fn(),
+}));
+
+const { mockReadCredential, mockWriteCredential } = vi.hoisted(() => ({
+    mockReadCredential: vi.fn(),
+    mockWriteCredential: vi.fn(),
+}));
+
+vi.mock('../src/common/auth/credential-store.js', () => ({
+    readCredential: mockReadCredential,
+    writeCredential: mockWriteCredential,
 }));
 
 const mockSearchConsole = vi.fn();
@@ -43,14 +54,6 @@ vi.mock('googleapis', () => ({
     }
 }));
 
-vi.mock('@napi-rs/keyring', () => ({
-    Entry: vi.fn().mockImplementation(() => ({
-        getPassword: vi.fn().mockResolvedValue(null),
-        setPassword: vi.fn(),
-        deletePassword: vi.fn(),
-    })),
-}));
-
 vi.mock('open', () => ({
     default: vi.fn(),
 }));
@@ -67,6 +70,10 @@ describe('Google Client', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         mockFetch.mockReset();
+        mockReadCredential.mockReset().mockResolvedValue(null);
+        mockWriteCredential.mockReset().mockResolvedValue(undefined);
+        process.env.GOOGLE_CLIENT_ID = 'test-client-id';
+        process.env.GOOGLE_CLIENT_SECRET = 'test-client-secret';
         delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
         delete process.env.GOOGLE_CLIENT_EMAIL;
         delete process.env.GOOGLE_PRIVATE_KEY;
@@ -86,6 +93,7 @@ describe('Google Client', () => {
                     }
                 }
             });
+            mockReadCredential.mockResolvedValue(JSON.stringify(tokens));
 
             const client = await getSearchConsoleClient(undefined, accountId);
             expect(client).toBe(mockSearchConsole);
@@ -104,6 +112,7 @@ describe('Google Client', () => {
                     [accountId]: { id: accountId, engine: 'google', alias: 'cached', tokens: { access_token: 't' } }
                 }
             });
+            mockReadCredential.mockResolvedValue(JSON.stringify({ access_token: 't' }));
 
             const client1 = await getSearchConsoleClient(undefined, accountId);
             const client2 = await getSearchConsoleClient(undefined, accountId);
@@ -119,6 +128,7 @@ describe('Google Client', () => {
                     [accountId]: { id: accountId, engine: 'google', alias: 'broken', tokens: { access_token: 't' } }
                 }
             });
+            mockReadCredential.mockResolvedValue(JSON.stringify({ access_token: 't' }));
 
             mockOAuth2Client.setCredentials.mockImplementationOnce(() => {
                 throw new Error('Token invalid');
@@ -145,6 +155,7 @@ describe('Google Client', () => {
             });
 
             mockOAuth2Client.refreshAccessToken.mockResolvedValue({ credentials: { access_token: 'new' } });
+            mockReadCredential.mockResolvedValue(JSON.stringify(tokens));
 
             await getSearchConsoleClient(undefined, accountId);
             expect(mockOAuth2Client.refreshAccessToken).toHaveBeenCalled();
@@ -208,6 +219,10 @@ describe('Google Client', () => {
                 tokens: { access_token: 'valid', expiry_date: Date.now() + 10000 }
             });
             vi.mocked(configModule.loadConfig).mockResolvedValue({ accounts: {} });
+            mockReadCredential.mockResolvedValue(JSON.stringify({
+                access_token: 'valid',
+                expiry_date: Date.now() + 10000
+            }));
 
             await getSearchConsoleClient(siteUrl);
 
@@ -274,8 +289,9 @@ describe('Google Client', () => {
 
             await new Promise(resolve => setTimeout(resolve, 0));
             expect(requestHandler).toBeDefined();
+            const state = mockOAuth2Client.generateAuthUrl.mock.calls.at(-1)?.[0]?.state;
 
-            const req = { url: '/oauth2callback?code=auth_code', headers: { host: 'localhost:3000' } };
+            const req = { url: `/oauth2callback?code=auth_code&state=${state}` };
             const res = { writeHead: vi.fn(), end: vi.fn() };
 
             await requestHandler(req, res);
@@ -283,6 +299,7 @@ describe('Google Client', () => {
             const tokens = await promise;
             expect(tokens).toEqual({ access_token: 'token' });
             expect(mockServer.close).toHaveBeenCalled();
+            expect(mockServer.listen).toHaveBeenCalledWith(3000, '127.0.0.1');
             expect(open).toHaveBeenCalled();
         });
 
@@ -304,14 +321,44 @@ describe('Google Client', () => {
 
             await new Promise(resolve => setTimeout(resolve, 0));
             expect(requestHandler).toBeDefined();
+            const state = mockOAuth2Client.generateAuthUrl.mock.calls.at(-1)?.[0]?.state;
 
-            const req = { url: '/oauth2callback?code=auth_code', headers: { host: 'localhost:3000' } };
+            const req = { url: `/oauth2callback?code=auth_code&state=${state}` };
             const res = { writeHead: vi.fn(), end: vi.fn() };
 
             await requestHandler(req, res);
 
             await expect(promise).rejects.toThrow('Auth failed');
             expect(res.writeHead).toHaveBeenCalledWith(500);
+        });
+
+        it('should reject an invalid state before exchanging the code', async () => {
+            let requestHandler: any;
+            const mockServer: any = { close: vi.fn() };
+            mockServer.listen = vi.fn().mockReturnValue(mockServer);
+            mockCreateServer.mockImplementation((handler: any) => {
+                requestHandler = handler;
+                return mockServer;
+            });
+            mockOAuth2Client.getToken.mockResolvedValue({ tokens: { access_token: 'token' } });
+
+            const promise = startLocalFlow('id', 'secret');
+            await new Promise(resolve => setTimeout(resolve, 0));
+            const state = mockOAuth2Client.generateAuthUrl.mock.calls.at(-1)?.[0]?.state;
+            const badRes = { writeHead: vi.fn(), end: vi.fn() };
+
+            await requestHandler(
+                { url: '/oauth2callback?code=stolen&state=invalid' },
+                badRes
+            );
+            expect(badRes.writeHead).toHaveBeenCalledWith(400, { 'Content-Type': 'text/html' });
+            expect(mockOAuth2Client.getToken).not.toHaveBeenCalled();
+
+            await requestHandler(
+                { url: `/oauth2callback?code=valid&state=${state}` },
+                { writeHead: vi.fn(), end: vi.fn() }
+            );
+            await expect(promise).resolves.toEqual({ access_token: 'token' });
         });
     });
 });

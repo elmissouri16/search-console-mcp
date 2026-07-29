@@ -2,56 +2,34 @@
 title: 'Security'
 ---
 
-# Security Overview
+# Security overview
 
-Search Console MCP is designed with a security-first architecture appropriate for a local CLI application.
+This fork uses user-owned credentials and local-first operation.
 
----
+## Authentication and storage
 
-## OAuth Model
+- Google OAuth uses your own Desktop OAuth client.
+- The loopback callback validates OAuth `state` and expires after five minutes.
+- Google refresh tokens and Bing API keys are stored only in the OS keychain.
+- There is no file fallback when secure storage is unavailable.
+- Service-account files remain under your control and must be protected as
+  secrets.
 
-The application uses OAuth 2.0 Device Authorization Flow.
+## Capability and network boundaries
 
-- Users authenticate directly with Google (OAuth) or Bing (API Key).
-- The application never receives user passwords.
-- Only read-only Search Console and Bing scopes are requested.
+- Mutating tools are disabled by default and require
+  `SEARCH_CONSOLE_MCP_ENABLE_WRITE_TOOLS=true`.
+- User-supplied schema URLs must be public HTTPS URLs; redirects, private
+  networks, response size, and request duration are restricted.
+- The fork performs no automatic update checks or installs and does not inject
+  update notices into tool output.
 
----
+## Data handling
 
-## Token Storage
+There is no developer-operated backend or telemetry code in this fork. Tools
+communicate with the selected Google, Bing, GA4, PageSpeed, or public website
+endpoint. Tool inputs and results can still pass through your MCP client and
+model provider.
 
-OAuth tokens are stored locally on the user’s device.
-
-Primary storage:
-- macOS: Keychain
-- Windows: Credential Manager
-- Linux: Secret Service / libsecret
-
-Fallback storage:
-- Encrypted file using AES-256-GCM
-- Machine-bound key derivation
-- File permissions restricted to the current user
-
-Only minimal token data is stored:
-- `refresh_token`
-- Expiry metadata
-
----
-
-## Data Handling
-
-Search Console MCP:
-
-- Does not operate a backend server.
-- Does not transmit user data to the developer.
-- Does not collect analytics about user data.
-
-All API communication occurs directly between the user’s device and Google's/Bing's APIs.
-
----
-
-## Revocation
-
-Users may revoke access at any time via their Google Account security settings.
-
-After revocation, stored tokens become invalid.
+See the repository [security policy](https://github.com/elmissouri16/search-console-mcp/blob/main/SECURITY.md)
+for reporting and limitations.

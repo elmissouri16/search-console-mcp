@@ -1,175 +1,107 @@
 ---
 title: "Authentication"
-description: "Authentication for Google Search Console and Bing Webmaster Tools."
+description: "Configure Google, Bing, and GA4 credentials in the hardened fork."
 ---
 
-To use this MCP server, you must authenticate with the Google Search Console API. We recommend the **Secure Desktop Flow**, which uses your local machine's keychain and hardware-bound encryption to store tokens safely.
+## Credential-storage rules
 
-## 1. OAuth 2.0 Desktop Flow (Recommended)
+- Google OAuth refresh tokens and Bing API keys are stored only in the OS
+  keychain.
+- Access tokens are kept in memory and are not deliberately persisted.
+- There is no file fallback for OAuth or Bing secrets. Setup fails closed when
+  the keychain is unavailable.
+- Account routing metadata remains in the local configuration file, which is
+  created with user-only permissions.
+- Legacy secrets from upstream versions are migrated to the keychain when
+  possible and stripped from the active configuration. Obsolete legacy token
+  files are removed only after all credentials in them have migrated.
 
-This method allows you to log in with your Google account via a browser, just like any other desktop application.
+## Google Search Console OAuth
 
-### Security Features
-- **System Keychain**: Tokens are stored in your OS's native credential manager (macOS Keychain, Windows Credential Manager, Linux Secret Service).
-- **Hardware-Bound Encryption**: Fallback storage uses AES-256-GCM with a key derived from your unique machine ID. Tokens cannot be decrypted on other devices.
-- **Multi-Account Support**: Easily switch between multiple Google accounts.
-
-### How to Login
-
-Run the following command in your terminal:
+This fork does not include somebody else's OAuth client credentials. Create a
+Google Cloud OAuth client of type **Desktop app**, enable the Search Console
+API, and supply your own client values:
 
 ```bash
-npx search-console-mcp setup
+export GOOGLE_CLIENT_ID="your-desktop-client-id"
+export GOOGLE_CLIENT_SECRET="your-desktop-client-secret"
+node dist/index.js setup
 ```
 
-1.  A local secure server will start.
-2.  Your browser will open to the Google Authorization page.
-3.  Grant access to your Search Console data.
-4.  The CLI will automatically fetch your email and securely store your credentials.
+The browser authorization callback:
 
-### Logout & Management
+- uses `http://127.0.0.1:3000/oauth2callback`;
+- listens only on `127.0.0.1`;
+- verifies a random OAuth `state`; and
+- stops after five minutes.
 
-You can manage your sessions directly from the CLI:
+The requested Search Console scope is read-only. Google Indexing API tools use
+their separate indexing scope and are write-gated by this fork.
+
+Remove a configured account and its keychain credentials with:
 
 ```bash
-# Logout of the default account
-npx search-console-mcp logout
-
-# Logout of a specific account by email
-npx search-console-mcp logout user@gmail.com
+node dist/index.js logout ACCOUNT_ID
 ```
 
----
+Use `node dist/index.js accounts list` to find the account ID.
 
-## 2. Service Account (Advanced / Headless)
+## Google service account
 
-For server-side environments or automated tasks where interactive login isn't possible, you can use a Google Cloud Service Account.
+Service accounts are suitable for servers or dedicated automation:
 
-### Step 1: Create a Service Account
-1.  Go to the [Google Cloud Console](https://console.cloud.google.com/).
-2.  Create a new project (or select an existing one).
-3.  Go to **IAM & Admin** > **Service Accounts**.
-4.  Click **Create Service Account**.
-5.  Give it a name (e.g., `seo-agent`) and click **Create and Continue**.
-6.  Click **Done**.
-
-### Step 2: Generate a JSON Key
-1.  In the Service Accounts list, click on your new account.
-2.  Select the **Keys** tab.
-3.  Click **Add Key** > **Create new key**.
-4.  Select **JSON** and click **Create**.
-5.  A JSON file will download to your computer. **Keep this file secure.**
-
-### Step 3: Grant Access in Search Console
-You must give your Service Account permission to see your data:
-1.  Open the [Google Search Console](https://search.google.com/search-console).
-2.  Go to **Settings** > **Users and permissions**.
-3.  Click **Add User**.
-4.  Enter the **Service Account Email** (e.g., `seo-agent@your-project.iam.gserviceaccount.com`).
-5.  Select Permissions (Full or Restricted) and click **Add**.
-
-### Step 4: Configure the Server
-Set the `GOOGLE_APPLICATION_CREDENTIALS` environment variable to point to your key file:
+1. Create a service account in Google Cloud.
+2. Enable the required API.
+3. Add the service-account email as a user of the Search Console or GA4
+   property.
+4. Store the JSON key outside the repository with restrictive permissions.
+5. Set the absolute path before starting setup or the MCP server.
 
 ```bash
-export GOOGLE_APPLICATION_CREDENTIALS="/path/to/your/key.json"
+export GOOGLE_APPLICATION_CREDENTIALS="/absolute/path/to/service-account.json"
+node dist/index.js setup
 ```
 
----
+Environment-based `GOOGLE_CLIENT_EMAIL` and `GOOGLE_PRIVATE_KEY` credentials
+are also supported for managed deployment environments.
 
-## 3. Bing Webmaster Tools (API Key)
+## Bing Webmaster Tools
 
-To access Bing data, you simply need an API Key.
-
-### Step 1: Get Your API Key
-1.  Go to [Bing Webmaster Tools Settings](https://www.bing.com/webmasters/settings/api).
-2.  Log in with your Microsoft account.
-3.  Click **Generate API Key**.
-4.  Copy the key.
-
-### Step 2: Configure the Client
-You can configure the Bing API Key in your MCP client configuration using the `BING_API_KEY` environment variable.
-
-**Example for Claude Desktop:**
-```json
-{
-  "mcpServers": {
-    "search-console": {
-      "command": "npx",
-      "args": ["-y", "search-console-mcp"],
-      "env": {
-        "BING_API_KEY": "YOUR_BING_API_KEY"
-      }
-    }
-  }
-}
-```
-
-### Setup Wizard support
-Alternatively, run `npx search-console-mcp setup` and choose Option 3 to configure your Bing API Key interactively.
-
----
-
-## 4. Google Analytics 4 (Service Account)
-
-GA4 integration currently requires a Service Account for the most reliable connection.
-
-### Step 1: Automated Setup
-
-Run the setup wizard with the GA4 flag:
+Run the local setup wizard and choose Bing:
 
 ```bash
-npx search-console-mcp setup --engine=ga4
+node dist/index.js setup
 ```
 
-### Step 2: Granting Property Access
+The entered API key is saved to the OS keychain. Alternatively, pass
+`BING_API_KEY` directly in the MCP server environment; environment credentials
+are not copied into the keychain automatically.
 
-Just like Search Console, you must add your Service Account email to your GA4 property:
-1.  Open [Google Analytics](https://analytics.google.com/).
-2.  Go to **Admin** > **Property Settings** > **Property Access Management**.
-3.  Click the blue **+** button > **Add users**.
-4.  Enter the **Service Account Email**.
-5.  Select the **Viewer** role (minimum) and click **Add**.
+## Google Analytics 4
 
----
-
-## 5. PageSpeed Insights (Optional API Key)
-
-PageSpeed tools (`pagespeed_analyze`, `pagespeed_core_web_vitals`, `analytics_pagespeed_correlation`) work **without any configuration** using Google's free tier.
-
-For heavy usage (batch audits, automated monitoring), you can provide an API key to increase quotas.
-
-| Scenario | Daily Limit | Rate Limit |
-|---|---|---|
-| No API key (default) | ~100 queries/day | ~1 query/sec |
-| With API key | 25,000 queries/day | ~4 queries/sec |
-
-### Step 1: Create an API Key
-1.  Go to the [Google Cloud Console — Credentials](https://console.cloud.google.com/apis/credentials).
-2.  Click **Create Credentials** > **API key**.
-3.  Copy the generated key.
-
-### Step 2: Enable the API
-1.  In the same GCP project, go to **APIs & Services** > **Library**.
-2.  Search for **PageSpeed Insights API**.
-3.  Click **Enable**.
-
-### Step 3: Configure
-Set the `PAGESPEED_API_KEY` environment variable in your MCP client or `.env` file:
+Run:
 
 ```bash
-export PAGESPEED_API_KEY="your-api-key-here"
+node dist/index.js setup --engine=ga4
 ```
 
-<Tip>
-  This key is optional. Without it, all PageSpeed tools still work — just at lower rate limits.
-</Tip>
+GA4 supports a service-account JSON file or your own Google OAuth Desktop
+client. Grant the chosen identity access to the GA4 property.
 
----
+## PageSpeed Insights
 
-## What's Next?
+`PAGESPEED_API_KEY` is optional. If setup writes it to a local `.env` file, the
+file is created with mode `0600`. Keep `.env` out of version control.
 
-Once you're authenticated, you can manage your accounts and connect additional ones:
+## Write capability
 
-- [Managing Accounts](/getting-started/accounts) — List, remove, and restrict accounts from the CLI.
-- [Multi-Account Support](/getting-started/multi-account) — Connect multiple Google and Bing accounts and let the server pick the right one automatically.
+Authentication alone does not enable mutating tools. To expose tools that add
+or delete sites, submit or delete sitemaps, change account routing, or submit
+indexing operations, set:
+
+```text
+SEARCH_CONSOLE_MCP_ENABLE_WRITE_TOOLS=true
+```
+
+Restart the MCP server after changing the flag, and review each tool call in
+your MCP client.

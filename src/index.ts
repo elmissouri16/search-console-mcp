@@ -81,7 +81,7 @@ const server = new McpServer({
   version: version,
 });
 
-const registerTool = createToolRegistrar(server, version);
+const registerTool = createToolRegistrar(server);
 
 // Get Started Tool
 registerTool(
@@ -1142,24 +1142,6 @@ registerTool(
       const result = await schemaValidator.validateSchema(data, type as 'url' | 'html' | 'json');
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }]
-      };
-    } catch (error) {
-      return formatError(error);
-    }
-  }
-);
-
-// Support Tools
-registerTool(
-  "util_star_repo",
-  "Star the GitHub repository to support the project. Uses GitHub CLI if available, or opens a browser.",
-  {},
-  async () => {
-    try {
-      const { starRepository } = await import("./google/tools/support.js");
-      const result = await starRepository();
-      return {
-        content: [{ type: "text", text: result }]
       };
     } catch (error) {
       return formatError(error);
@@ -2728,18 +2710,6 @@ registerTool(
 
 async function main() {
   const command = process.argv[2];
-
-  if (process.stdout.isTTY) {
-    try {
-      const { checkVersionCached, promptUpdateInteractive } = await import("./utils/update.js");
-      const info = await checkVersionCached(version);
-      if (info.updateAvailable) {
-        await promptUpdateInteractive(info.latestVersion, version);
-      }
-    } catch {
-      // Fail silently
-    }
-  }
 
   if (command === 'update') {
     const { runUpdateCommand } = await import('./utils/update.js');

@@ -47,7 +47,7 @@ Provides a side-by-side view of a page's search ranking performance vs. its on-s
 
 GA4 requires a **Google Cloud Service Account** for authentication.
 
-1.  **Run Setup**: `npx search-console-mcp setup --engine=ga4`
+1.  **Run Setup**: `node dist/index.js setup --engine=ga4`
 2.  **Auth Method**: Provide your Service Account JSON key path.
 3.  **Property Selection**: The setup wizard will list your available GA4 properties and help you select the correct one.
 

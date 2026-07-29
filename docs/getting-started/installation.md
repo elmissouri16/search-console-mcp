@@ -1,121 +1,91 @@
 ---
-title: "Installation"
-description: "Get up and running with Google and Bing in less than 2 minutes."
+title: "Installation from the reviewed repository"
+description: "Clone, build, and configure the security-hardened fork."
 ---
 
-We designed `search-console-mcp` to work instantly with your favorite AI editor. No complex configuration required.
+This fork is installed from its Git repository. It is deliberately not
+published as an npm package.
 
 ## Prerequisites
 
-1.  **Node.js 18 or higher**
-2.  **A verified Google Search Console, Bing Webmaster Tools, or Google Analytics 4 property**
+- Git
+- Node.js 20 or newer
+- Corepack/pnpm
+- A verified Google Search Console, Bing Webmaster Tools, or GA4 property
 
-## 🚀 One-Line Setup
-
-Run this command in your terminal. The wizard will walk you through connecting your Google and/or Bing accounts.
+## Clone and build
 
 ```bash
-npx search-console-mcp setup
+git clone https://github.com/elmissouri16/search-console-mcp.git
+cd search-console-mcp
+corepack enable
+corepack pnpm install --frozen-lockfile
+corepack pnpm run build
 ```
 
-The tool will open your browser for secure authentication and then display the exact code snippet to copy-paste into your config.
+Run setup from the local build:
 
-Want to add more accounts later? Just run `setup` again — it supports multiple Google and Bing accounts.
+```bash
+node dist/index.js setup
+```
 
----
+Running `npx search-console-mcp` uses the separately published upstream npm
+package, not this fork.
 
-## Client Configuration
+## MCP client configuration
 
-If you prefer to set it up manually, here are the instructions for the most popular clients.
-
-### Claude Desktop
-
-Add this to your `claude_desktop_config.json`:
+The setup wizard prints a configuration for the current checkout. For manual
+configuration, use absolute paths for both Node and the built entry point:
 
 ```json
 {
   "mcpServers": {
     "search-console": {
-      "command": "npx",
-      "args": ["-y", "search-console-mcp"],
+      "command": "/absolute/path/to/node",
+      "args": [
+        "/absolute/path/to/search-console-mcp/dist/index.js"
+      ],
       "env": {
-        "BING_API_KEY": "your-api-key-here",
-        "GOOGLE_APPLICATION_CREDENTIALS": "/path/to/your/service-account.json",
-        "PAGESPEED_API_KEY": "your-pagespeed-key (optional)"
+        "GOOGLE_CLIENT_ID": "your-own-desktop-oauth-client-id",
+        "GOOGLE_CLIENT_SECRET": "your-own-desktop-oauth-client-secret",
+        "PAGESPEED_API_KEY": "optional",
+        "SEARCH_CONSOLE_MCP_ENABLE_WRITE_TOOLS": "false"
       }
     }
   }
 }
 ```
 
-*That's it! Environment variables are optional and only needed if you are using a Bing API Key, a Google Service Account, or a PageSpeed API Key.*
+Use `command -v node` to locate Node. Replace the repository path with the
+actual clone location.
 
-### Cursor
-
-1.  Open **Cursor Settings** (Cmd + ,).
-2.  Navigate to **Features** > **MCP**.
-3.  Click **+ Add New MCP Server**.
-4.  Enter the following:
-    *   **Name:** `Search Console`
-    *   **Type:** `command`
-    *   **Command:** `npx -y search-console-mcp`
-5.  **Environment Variables (Optional):** Click **Edit** on your new server to add variables if needed:
-    *   `BING_API_KEY`: For Bing integration.
-    *   `GOOGLE_APPLICATION_CREDENTIALS`: For Google Service Account auth.
-    *   `PAGESPEED_API_KEY`: For higher PageSpeed quotas (optional).
-
-<Tip>
-  If you see an error about "command not found," try using the full path to your node executable or `npm` prefix.
-</Tip>
-
-### VS Code
-
-You can configure the server specifically for your workspace using the standard MCP extension.
-
-1.  **Option A: Config File**
-    Create a file named `.vscode/mcp.json` and add:
-
-    ```json
-    {
-        "servers": {
-            "search-console": {
-                "command": "npx",
-                "args": [
-                    "-y",
-                    "search-console-mcp"
-                ],
-                "env": {
-                    "BING_API_KEY": "your-api-key-here",
-                    "GOOGLE_APPLICATION_CREDENTIALS": "/path/to/your/service-account.json",
-                    "PAGESPEED_API_KEY": "your-pagespeed-key (optional)"
-                }
-            }
-        }
-    }
-    ```
-
-2.  **Option B: Command Palette**
-    *   Open the Command Palette (`Cmd+Shift+P` / `Ctrl+Shift+P`).
-    *   Search for **"MCP: Add Server"**.
-    *   Enter the command: `npx -y search-console-mcp`.
-
----
-
-## Verify Your Setup
-
-After installation, confirm your accounts are connected:
+## Verify
 
 ```bash
-npx search-console-mcp accounts list
+corepack pnpm test
+corepack pnpm run build
+node dist/index.js accounts list
 ```
 
-This will show all connected Google and Bing accounts and which sites they can access.
+## Updating
 
----
+Updates are manual so you can inspect them first:
 
-## What's Next?
+```bash
+cd /absolute/path/to/search-console-mcp
+git fetch origin
+git log --oneline HEAD..origin/main
+git pull --ff-only
+corepack pnpm install --frozen-lockfile
+corepack pnpm run build
+corepack pnpm test
+```
 
-- [Authentication](/getting-started/authentication) — Detailed auth options (OAuth, Service Account, API Key for Google, Bing, and GA4)
-- [Managing Accounts](/getting-started/accounts) — List, remove, and restrict accounts across all platforms
-- [Multi-Account Support](/getting-started/multi-account) — Connect multiple accounts across all platforms
-- [First Queries](/getting-started/first-queries) — Start asking your AI agent questions
+The application does not perform background version checks or automatic
+installation.
+
+## Next steps
+
+- [Authentication](/getting-started/authentication)
+- [Managing accounts](/getting-started/accounts)
+- [Trust and security](/concepts/trust-and-security)

@@ -39,6 +39,7 @@ vi.mock('fs', () => ({
     statSync: vi.fn(),
     readFileSync: vi.fn(),
     writeFileSync: vi.fn(),
+    chmodSync: vi.fn(),
 }));
 
 vi.mock('readline', () => ({
@@ -63,7 +64,8 @@ vi.mock('../src/google/client.js', () => ({
 
 vi.mock('../src/bing/client.js', () => ({
     getBingClient: vi.fn(),
-    BingClient: MockBingClient
+    BingClient: MockBingClient,
+    saveBingApiKeyForAccount: vi.fn()
 }));
 
 vi.mock('googleapis', () => ({
@@ -204,10 +206,11 @@ describe('Setup Full', () => {
 
             await setupModule.main();
 
-            expect(configModule.updateAccount).toHaveBeenCalledWith(expect.objectContaining({
-                engine: 'bing',
-                apiKey: 'my-api-key'
-            }));
+            const bingClient = await import('../src/bing/client.js');
+            expect(bingClient.saveBingApiKeyForAccount).toHaveBeenCalledWith(
+                expect.objectContaining({ engine: 'bing' }),
+                'my-api-key'
+            );
         });
 
         it('should handle Google Login flow', async () => {
@@ -294,8 +297,9 @@ describe('Setup Full', () => {
             expect(fs.writeFileSync).toHaveBeenCalledWith(
                 expect.stringContaining('.env'),
                 expect.stringContaining('PAGESPEED_API_KEY=my-pagespeed-key'),
-                'utf8'
+                { encoding: 'utf8', mode: 0o600 }
             );
+            expect(fs.chmodSync).toHaveBeenCalledWith(expect.stringContaining('.env'), 0o600);
         });
 
         it('should handle main menu exit', async () => {

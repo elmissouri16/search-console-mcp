@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { validateSchema } from '../src/common/tools/schema-validator.js';
 
+vi.mock('dns/promises', () => ({
+    lookup: vi.fn().mockResolvedValue([{ address: '93.184.216.34', family: 4 }]),
+}));
+
 // Mock Validator - matches the WAE-style wrapper format: { jsonld: { [Type]: [schemas] } }
 vi.mock('@adobe/structured-data-validator', () => {
     return {
@@ -116,7 +120,10 @@ describe('Schema Validator Extended', () => {
         const result = await validateSchema('https://example.com', 'url');
         expect(result.valid).toBe(true);
         expect(result.schemas).toHaveLength(1);
-        expect(mockFetch).toHaveBeenCalledWith('https://example.com');
+        expect(mockFetch).toHaveBeenCalledWith(
+            new URL('https://example.com'),
+            expect.objectContaining({ redirect: 'manual' })
+        );
     });
 
     it('should handle URL fetch error', async () => {

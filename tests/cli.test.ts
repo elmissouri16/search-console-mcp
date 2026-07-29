@@ -10,6 +10,7 @@ describe('CLI runner', () => {
     toolsRegistry.clear();
     log.mockClear();
     error.mockClear();
+    delete process.env.SEARCH_CONSOLE_MCP_ENABLE_WRITE_TOOLS;
   });
 
   afterEach(() => {
@@ -445,10 +446,7 @@ describe('CLI runner', () => {
     await runCli(['node', 'bin', 'run', 'plain_string_output']);
   });
 
-  it('appends update notice in MCP server mode (isCliRun is false)', async () => {
-    const originalArgv = process.argv;
-    process.argv = ['node', 'bin', 'stdio'];
-
+  it('does not inject system-like notices into MCP responses', async () => {
     const fetchMock = vi.spyOn(global, 'fetch').mockResolvedValue({
       ok: true,
       json: async () => ({ version: '9.9.9' }),
@@ -456,7 +454,7 @@ describe('CLI runner', () => {
 
     const mcpTool = vi.fn();
     const server = { tool: mcpTool };
-    const registerTool = createToolRegistrar(server, '1.0.0');
+    const registerTool = createToolRegistrar(server);
 
     const handler = vi.fn(async () => ({ content: [{ type: 'text', text: 'response' }] }));
     registerTool('test_notice', 'desc', {}, handler);
@@ -464,7 +462,24 @@ describe('CLI runner', () => {
     const wrappedHandler = mcpTool.mock.calls[0][3];
     const res = await wrappedHandler({});
 
-    expect(res.content[0].text).toContain('[SYSTEM NOTICE: A newer version v9.9.9');
-    process.argv = originalArgv;
+    expect(res.content[0].text).toBe('response');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('blocks write tools unless explicitly enabled', async () => {
+    const mcpTool = vi.fn();
+    const handler = vi.fn(async () => ({ content: [{ type: 'text', text: 'changed' }] }));
+    createToolRegistrar({ tool: mcpTool })('sites_delete', 'delete', {}, handler);
+
+    const wrappedHandler = mcpTool.mock.calls[0][3];
+    const blocked = await wrappedHandler({});
+    expect(blocked.isError).toBe(true);
+    expect(blocked.content[0].text).toContain('disabled by default');
+    expect(handler).not.toHaveBeenCalled();
+
+    process.env.SEARCH_CONSOLE_MCP_ENABLE_WRITE_TOOLS = 'true';
+    const allowed = await wrappedHandler({});
+    expect(allowed.content[0].text).toBe('changed');
+    expect(handler).toHaveBeenCalledOnce();
   });
 });

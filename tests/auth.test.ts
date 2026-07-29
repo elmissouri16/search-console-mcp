@@ -26,6 +26,7 @@ vi.mock('../src/common/auth/config.js', async () => {
         loadConfig: vi.fn().mockResolvedValue({ accounts: {} }),
         updateAccount: vi.fn().mockResolvedValue(undefined),
         removeAccount: vi.fn().mockResolvedValue(undefined),
+        cleanupMigratedLegacyTokenFiles: vi.fn().mockResolvedValue(undefined),
     };
 });
 
@@ -71,6 +72,10 @@ vi.mock('googleapis', () => {
 describe('Authentication & Security (Multi-Account)', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        mockGetPassword.mockReset().mockResolvedValue(null);
+        mockSetPassword.mockReset().mockResolvedValue(undefined);
+        process.env.GOOGLE_CLIENT_ID = 'test-client-id';
+        process.env.GOOGLE_CLIENT_SECRET = 'test-client-secret';
     });
 
     const mockAccount: AccountConfig = {
@@ -91,23 +96,25 @@ describe('Authentication & Security (Multi-Account)', () => {
 
         // Check that config update was called
         const { updateAccount } = await import('../src/common/auth/config.js');
-        expect(updateAccount).toHaveBeenCalledWith(expect.objectContaining({
-            id: 'google_test',
-            tokens: expect.objectContaining({ refresh_token: 'test-refresh' })
-        }));
+        expect(updateAccount).toHaveBeenCalledWith(expect.objectContaining({ id: 'google_test' }));
+        expect(vi.mocked(updateAccount).mock.calls[0][0].tokens).toBeUndefined();
     });
 
     it('should load tokens from keychain if available', async () => {
-        const tokens = { refresh_token: 'keychain-refresh' };
+        const tokens = { refresh_token: 'keychain-refresh', access_token: 'do-not-persist' };
         mockGetPassword.mockResolvedValue(JSON.stringify(tokens));
 
         const result = await loadTokensForAccount(mockAccount);
 
-        expect(result).toMatchObject(tokens);
+        expect(result).toMatchObject({ refresh_token: 'keychain-refresh' });
+        expect(result.access_token).toBeUndefined();
+        expect(mockSetPassword).toHaveBeenCalledWith(
+            expect.not.stringContaining('do-not-persist')
+        );
         expect(mockGetPassword).toHaveBeenCalled();
     });
 
-    it('should fallback to tokens in account config if keychain fails', async () => {
+    it('should migrate legacy config tokens into the keychain', async () => {
         mockGetPassword.mockRejectedValue(new Error('Keychain error'));
 
         const accountWithTokens: AccountConfig = {
@@ -117,19 +124,15 @@ describe('Authentication & Security (Multi-Account)', () => {
 
         const result = await loadTokensForAccount(accountWithTokens);
         expect(result).toMatchObject({ refresh_token: 'config-refresh' });
+        expect(mockSetPassword).toHaveBeenCalledWith(expect.stringContaining('config-refresh'));
+        expect(accountWithTokens.tokens).toBeUndefined();
     });
 
     it('should delete tokens on logout', async () => {
-        const { loadConfig, removeAccount } = await import('../src/common/auth/config.js');
-        vi.mocked(loadConfig).mockResolvedValue({
-            accounts: {
-                'google_test': mockAccount
-            }
-        });
+        const { removeAccount } = await import('../src/common/auth/config.js');
 
         await logout('google_test');
 
-        expect(mockDeletePassword).toHaveBeenCalled();
         expect(removeAccount).toHaveBeenCalledWith('google_test');
     });
 

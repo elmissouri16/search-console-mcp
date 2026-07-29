@@ -1,113 +1,65 @@
+# Security policy
 
-# Security Policy
+## Supported version
 
-## Supported Versions
+Only the latest commit on this fork's `main` branch is maintained. The fork is
+installed from source and is not published to npm.
 
-The latest published version of Search Console MCP is actively maintained and receives security updates.
+## Reporting a vulnerability
 
-Older versions may not receive patches. Users are encouraged to upgrade to the latest release.
+Do not disclose an unpatched vulnerability in a public issue. Use the fork's
+[private GitHub security advisory form](https://github.com/elmissouri16/search-console-mcp/security/advisories/new).
 
----
+Include the affected commit, reproduction steps, impact, and any suggested
+mitigation. Vulnerabilities that exist in the upstream project should also be
+reported privately to the upstream maintainer.
 
-## Reporting a Vulnerability
+## Security model
 
-If you discover a security vulnerability, please do not open a public GitHub issue.
+### Credentials
 
-Instead, report it privately:
+- Google OAuth uses a user-owned Desktop OAuth client.
+- The OAuth callback binds to loopback, validates `state`, and expires.
+- Google refresh tokens and Bing keys are stored only in the OS keychain.
+- No secret file fallback is used when keychain storage fails.
+- Service-account JSON files remain user-managed secrets.
 
-Email: saurabhsharma2u@gmail.com
+### Capabilities
 
-Please include:
+Read and analysis tools are enabled by default. Tools that mutate account,
+property, sitemap, or indexing state require the explicit
+`SEARCH_CONSOLE_MCP_ENABLE_WRITE_TOOLS=true` server setting. This gate reduces
+accidental exposure; it does not replace reviewing each requested operation.
 
-- A clear description of the issue
-- Steps to reproduce
-- Potential impact
-- Any suggested mitigation (if known)
+### Network access
 
-You will receive acknowledgment within a reasonable timeframe.
+Normal tools contact Google, Bing, PageSpeed, and GA4 endpoints as required.
+The schema validator can retrieve a user-supplied web page, but restricts it to
+public HTTPS addresses, validates redirects, blocks local/private/reserved
+networks, limits response size, and applies a timeout.
 
----
+### Local-first operation
 
-## Security Model
+The project has no developer-operated data collection backend and no telemetry
+code identified in this fork. Automatic update checks, automatic installation,
+and GitHub starring behavior are removed. Updates are pulled and rebuilt
+manually from the repository.
 
-Search Console MCP is designed as a local-first CLI tool with the following security principles:
+## Limitations
 
-### 1. OAuth-Based Authentication
-
-- Uses OAuth 2.0 Device Authorization Flow
-- Requests minimal scope (`webmasters.readonly`)
-- Does not request write access to Google services
-- Does not collect Google account passwords
-
-Users authenticate directly with Google.
-
----
-
-### 2. Local Token Storage
-
-OAuth tokens are stored locally on the user’s device.
-
-Primary storage:
-- macOS: Keychain
-- Windows: Credential Manager
-- Linux: Secret Service / libsecret
-
-Fallback storage (if secure vault unavailable):
-- Encrypted using AES-256-GCM
-- Machine-bound key derivation
-- File permissions restricted to current user (600)
-
-Only minimal data is stored:
-- `refresh_token`
-- Expiry metadata
-
-Access tokens are short-lived and not permanently stored unless necessary.
-
----
-
-### 3. No Central Data Collection
-
-Search Console MCP:
-
-- Does not operate a backend server
-- Does not transmit user data to the developer
-- Does not collect analytics on user Search Console data
-
-All API communication occurs directly between the user’s machine and Google’s APIs.
-
----
-
-## Security Boundaries
-
-The primary security boundary is the protection of OAuth refresh tokens.
-
-If an attacker gains:
-
-- Full access to the user’s operating system account
-- Administrative access to the machine
-
-Then local security protections may be bypassed. This risk is inherent to all CLI-based applications.
-
----
+If an attacker controls your operating-system account, MCP configuration, Node
+runtime, or local checkout, they may bypass these controls. A compromised MCP
+client or model provider can also expose tool inputs and outputs. Dependency
+audits are point-in-time checks, not proof of future safety.
 
 ## Revocation
 
-Users may revoke application access at any time via their Google Account security settings.
+Revoke Google access from your Google Account security settings and remove the
+local account with:
 
-Upon revocation:
-- Stored refresh tokens become invalid
-- Further API access will fail
+```bash
+node dist/index.js logout ACCOUNT_ID
+```
 
-Users may also run logout commands to remove locally stored credentials.
-
----
-
-## Responsible Disclosure
-
-We appreciate responsible disclosure and will make reasonable efforts to:
-
-- Investigate reported issues
-- Patch confirmed vulnerabilities
-- Credit reporters (if desired)
-
-Security is a priority, especially around OAuth and credential handling.
+Rotate Bing keys and service-account keys at their providers when compromise is
+suspected.

@@ -8,6 +8,7 @@ const { machineIdSync } = nodeMachineId;
 
 const CONFIG_PATH = join(homedir(), '.search-console-mcp-config.enc');
 const LEGACY_TOKEN_PATH = join(homedir(), '.search-console-mcp-tokens.enc');
+const LEGACY_JSON_TOKEN_PATH = join(homedir(), '.search-console-mcp-tokens.json');
 const ENCRYPTION_ALGORITHM = 'aes-256-gcm';
 
 export type EngineType = 'google' | 'bing' | 'ga4';
@@ -18,6 +19,7 @@ export interface AccountConfig {
     alias: string;
     websites?: string[];
     // Google specific
+    /** Legacy-only OAuth data. Migrated to the OS keychain on first access. */
     tokens?: {
         refresh_token?: string | null;
         expiry_date?: number | null;
@@ -25,6 +27,7 @@ export interface AccountConfig {
     };
     serviceAccountPath?: string;
     // Bing specific
+    /** Legacy-only Bing key. Migrated to the OS keychain on first access. */
     apiKey?: string;
     // GA4 specific
     ga4PropertyId?: string;
@@ -133,7 +136,6 @@ export async function loadConfig(): Promise<AppConfig> {
     }
 
     // 3b. Check for legacy OAuth tokens (unencrypted JSON file)
-    const LEGACY_JSON_TOKEN_PATH = join(homedir(), '.search-console-mcp-tokens.json');
     if (existsSync(LEGACY_JSON_TOKEN_PATH)) {
         try {
             const raw = readFileSync(LEGACY_JSON_TOKEN_PATH, 'utf-8');
@@ -154,21 +156,6 @@ export async function loadConfig(): Promise<AppConfig> {
             }
         } catch (e) {
             // Ignore parse errors
-        }
-    }
-
-    // 4. Check for Bing Environment Variable (Legacy)
-    const bingApiKey = process.env.BING_API_KEY;
-    if (bingApiKey) {
-        const id = 'legacy_bing';
-        if (!config.accounts[id]) {
-            config.accounts[id] = {
-                id,
-                engine: 'bing',
-                alias: 'Bing API Key (env)',
-                apiKey: bingApiKey,
-                isLegacy: true
-            };
         }
     }
 
@@ -193,8 +180,49 @@ export async function updateAccount(account: AccountConfig) {
     await saveConfig(config);
 }
 
+/**
+ * Remove obsolete token files only after every credential they contain has
+ * been migrated to the OS keychain and stripped from the active config.
+ */
+export async function cleanupMigratedLegacyTokenFiles() {
+    const config = await loadConfig();
+
+    if (existsSync(LEGACY_JSON_TOKEN_PATH)) {
+        const migrated = config.accounts.legacy_google_oauth;
+        if (migrated && !migrated.tokens) {
+            try {
+                unlinkSync(LEGACY_JSON_TOKEN_PATH);
+            } catch {
+                // Credential migration succeeded; retain an undeletable file.
+            }
+        }
+    }
+
+    if (!existsSync(LEGACY_TOKEN_PATH)) return;
+
+    try {
+        const encryptedData = readFileSync(LEGACY_TOKEN_PATH, 'utf-8');
+        const legacyTokens = JSON.parse(decrypt(encryptedData));
+        const accountIds = Object.keys(legacyTokens).map(
+            (email) => `google_${email.replace(/[^a-zA-Z0-9]/g, '_')}`
+        );
+        const allMigrated = accountIds.every((id) => {
+            const account = config.accounts[id];
+            return account && !account.tokens;
+        });
+        if (allMigrated) unlinkSync(LEGACY_TOKEN_PATH);
+    } catch {
+        // Keep an unreadable legacy file rather than deleting unknown data.
+    }
+}
+
 export async function removeAccount(accountId: string) {
     const config = await loadConfig();
+    const account = config.accounts[accountId];
+    if (account) {
+        const { deleteStoredCredentials } = await import('./credential-store.js');
+        await deleteStoredCredentials(account);
+    }
     delete config.accounts[accountId];
     await saveConfig(config);
 }

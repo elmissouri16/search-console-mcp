@@ -1,13 +1,12 @@
 #!/usr/bin/env node
 import 'dotenv/config';
-import { readFileSync, existsSync, statSync, writeFileSync } from 'fs';
+import { readFileSync, existsSync, statSync, writeFileSync, chmodSync } from 'fs';
 import { resolve, dirname, extname, join } from 'path';
 import { createInterface } from 'readline';
 import { homedir } from 'os';
 import { fileURLToPath } from 'url';
-import { execSync } from 'child_process';
 import { startLocalFlow, getUserEmail, logout, getSearchConsoleClient, DEFAULT_CLIENT_ID, DEFAULT_CLIENT_SECRET, saveTokensForAccount } from './google/client.js';
-import { getBingClient, BingClient } from './bing/client.js';
+import { getBingClient, BingClient, saveBingApiKeyForAccount } from './bing/client.js';
 import { google } from 'googleapis';
 import { loadConfig, updateAccount, AccountConfig } from './common/auth/config.js';
 import { colors, printBoxHeader, printStatusLine } from './utils/ui.js';
@@ -203,37 +202,26 @@ export async function testConnection(keyPath: string): Promise<boolean> {
 }
 
 export function showMcpConfigSnippet() {
+    const env: Record<string, string> = {
+        SEARCH_CONSOLE_MCP_ENABLE_WRITE_TOOLS: 'false'
+    };
+    if (process.env.GOOGLE_CLIENT_ID) env.GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+    if (process.env.GOOGLE_CLIENT_SECRET) env.GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
+    if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+        env.GOOGLE_APPLICATION_CREDENTIALS = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    }
+    if (process.env.PAGESPEED_API_KEY) env.PAGESPEED_API_KEY = process.env.PAGESPEED_API_KEY;
+
     console.log('\nAdd this to your MCP client configuration:\n');
     console.log(JSON.stringify({
         mcpServers: {
             "search-console": {
-                command: "npx",
-                args: ["-y", "search-console-mcp"]
+                command: process.execPath,
+                args: [join(__dirname, "index.js")],
+                env
             }
         }
     }, null, 2));
-}
-
-export function resolveRepo(dirname: string): string {
-    let repo = '';
-    try {
-        const url = execSync('git remote get-url origin', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
-        repo = url
-            .replace(/^git@github\.com:|^https:\/\/github\.com\//, '')
-            .replace(/\.git$/, '');
-    } catch {
-        // Fallback to package.json
-        const pkgPath = resolve(dirname, '../package.json');
-        if (existsSync(pkgPath)) {
-            const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
-            if (pkg.repository?.url) {
-                repo = pkg.repository.url.replace(/.*github\.com\//, '').replace(/\.git$/, '');
-            } else if (pkg.mcpName && pkg.mcpName.includes('/')) {
-                repo = pkg.mcpName.replace(/^io\.github\./, '').split('/').slice(-2).join('/');
-            }
-        }
-    }
-    return repo;
 }
 
 export async function login() {
@@ -246,6 +234,12 @@ export async function login() {
     // Use centralized defaults
     const clientId = DEFAULT_CLIENT_ID;
     const clientSecret = DEFAULT_CLIENT_SECRET;
+    if (!clientId || !clientSecret) {
+        printError('OAuth is not configured for this fork.');
+        console.log('Create a Google OAuth Desktop application, then set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.');
+        console.log('See: https://github.com/elmissouri16/search-console-mcp#google-oauth');
+        process.exit(1);
+    }
 
     console.log(`\n${colors.bold}💡 Google Indexing API Rules:${colors.reset}`);
     console.log(`   Officially, the Google Indexing API is only supported for pages containing`);
@@ -324,8 +318,6 @@ export async function login() {
 
         printStep(2, 'Configure your MCP client');
         showMcpConfigSnippet();
-
-        await supportProject();
     } catch (error) {
         printError(`Authentication failed: ${(error as Error).message}`);
         console.log('\nTip: Ensure you are using a "Desktop Application" Client ID type in the Cloud Console.');
@@ -452,25 +444,6 @@ async function setupServiceAccount() {
     printStep(4, 'Configure your MCP client');
     showMcpConfigSnippet();
     console.log('\n🎉 Setup complete! You can now use Search Console MCP.\n');
-
-    await supportProject();
-}
-
-async function supportProject() {
-    const answer = await ask('\nWould you like to star the repo on GitHub? (Y/n): ');
-    if (answer === '' || answer.toLowerCase().startsWith('y')) {
-        try {
-            const repo = resolveRepo(__dirname);
-            if (repo && /^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/.test(repo)) {
-                execSync(`gh api -X PUT /user/starred/${repo}`, { stdio: 'ignore' });
-                printSuccess('Thanks for your support! ⭐');
-            } else {
-                console.log('🔗 https://github.com/saurabhsharma2u/search-console-mcp');
-            }
-        } catch (error) {
-            console.log('🔗 https://github.com/saurabhsharma2u/search-console-mcp');
-        }
-    }
 }
 
 async function setupBing() {
@@ -519,19 +492,16 @@ async function setupBing() {
         id: `bing_${Date.now()}`,
         engine: 'bing',
         alias,
-        apiKey,
         websites: selectedWebsites
     };
 
-    await updateAccount(account);
+    await saveBingApiKeyForAccount(account, apiKey);
     printSuccess(`Successfully added Bing account ${alias}!`);
 
     printStep(2, 'Configure your MCP client');
     showMcpConfigSnippet();
 
     console.log('\n🎉 Setup complete! You can now use Search Console MCP.\n');
-
-    await supportProject();
 }
 
 async function checkAndShowSites(engine: 'google' | 'bing', configStatus: any): Promise<boolean> {
@@ -807,6 +777,11 @@ async function setupGA4OAuth() {
 
     const clientId = DEFAULT_CLIENT_ID;
     const clientSecret = DEFAULT_CLIENT_SECRET;
+    if (!clientId || !clientSecret) {
+        printError('OAuth is not configured for this fork.');
+        console.log('Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET from your own Google OAuth Desktop application.');
+        return;
+    }
     const SCOPES = ['https://www.googleapis.com/auth/analytics.readonly', 'https://www.googleapis.com/auth/userinfo.email'];
 
     try {
@@ -890,14 +865,15 @@ async function setupPageSpeed() {
         }
     }
 
-    writeFileSync(envPath, envContent, 'utf8');
+    writeFileSync(envPath, envContent, { encoding: 'utf8', mode: 0o600 });
+    chmodSync(envPath, 0o600);
     printSuccess('Successfully wrote PAGESPEED_API_KEY to .env file!');
 
     console.log(`\n${colors.bold}Note for MCP Client integration:${colors.reset}`);
     console.log('If you run this server via an MCP Client (like Cursor, Claude Desktop, VS Code),');
     console.log('you must configure the environment variables in your client\'s config file.');
     console.log('See the documentation for more details:');
-    console.log(`${colors.cyan}https://github.com/saurabhsharma2u/search-console-mcp#pagespeed-insights-optional-api-key${colors.reset}\n`);
+    console.log(`${colors.cyan}https://github.com/elmissouri16/search-console-mcp/blob/main/docs/getting-started/authentication.md#pagespeed-insights${colors.reset}\n`);
 
     // Force reloading of env vars for current process
     process.env.PAGESPEED_API_KEY = apiKey;

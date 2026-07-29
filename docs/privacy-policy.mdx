@@ -17,11 +17,10 @@ Search Console MCP requests the following Google OAuth scope:
 - `https://www.googleapis.com/auth/webmasters.readonly` (Google)
 - `BING_API_KEY` Environment Variable (Bing)
 
-This provides **read-only access** to Google Search Console and Bing Webmaster Tools data.
+The default Search Console scope is read-only. Separate indexing and Bing tools
+can mutate remote state only after the user explicitly enables write tools.
 
 The application:
-- Does not request write access.
-- Does not modify Search Console data.
 - Does not access unrelated Google services.
 
 ---
@@ -31,8 +30,8 @@ The application:
 Search Console MCP operates entirely on the user’s local machine.
 
 - OAuth tokens (including refresh tokens) are stored locally.
-- Tokens are stored using the operating system’s secure credential storage when available (e.g., Keychain, Credential Manager, Secret Service).
-- If a fallback storage file is used, it is encrypted and restricted to the local user.
+- Google refresh tokens and Bing API keys are stored using the operating system’s secure credential storage (e.g., Keychain, Credential Manager, Secret Service).
+- If secure storage is unavailable, credential setup fails; no secret file fallback is written.
 
 No Search Console data is transmitted to or stored on any external server controlled by the developer.
 
@@ -54,8 +53,8 @@ All API requests are made directly from the user’s device to Google’s and Bi
 
 The application follows industry best practices:
 
-- OAuth 2.0 Device Authorization Flow
-- Minimal read-only scopes
+- OAuth 2.0 loopback flow with state validation and timeout
+- User-owned Google Desktop OAuth client
 - Secure local token storage
 - Strict file permissions (where applicable)
 
@@ -75,6 +74,4 @@ Users may:
 
 ## 6. Contact
 
-For questions or concerns:
-
-**Email:** saurabhsharma2u@gmail.com
+Use the fork's private GitHub security-advisory form for security concerns.

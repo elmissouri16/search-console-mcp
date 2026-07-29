@@ -1,5 +1,6 @@
 import { resolveAccount } from '../common/auth/resolver.js';
-import { loadConfig } from '../common/auth/config.js';
+import { AccountConfig, loadConfig, updateAccount } from '../common/auth/config.js';
+import { readCredential, writeCredential } from '../common/auth/credential-store.js';
 
 export interface BingSite {
     Url: string;
@@ -209,9 +210,50 @@ export class BingClient {
 
 let cachedBingClients: Record<string, BingClient> = {};
 
+export async function loadBingApiKeyForAccount(account: AccountConfig): Promise<string | null> {
+    try {
+        const stored = await readCredential(account, 'bing-api');
+        if (stored) return stored;
+    } catch (error) {
+        if (!account.apiKey) {
+            throw new Error(`OS keychain is unavailable for Bing account ${account.alias}: ${(error as Error).message}`);
+        }
+    }
+
+    if (!account.apiKey) return null;
+
+    const legacyKey = account.apiKey;
+    try {
+        await writeCredential(account, 'bing-api', legacyKey);
+        delete account.apiKey;
+        await updateAccount(account);
+        return legacyKey;
+    } catch (error) {
+        throw new Error(
+            `Bing credentials for ${account.alias} could not be migrated to the OS keychain. ` +
+            `No file fallback is allowed. Cause: ${(error as Error).message}`
+        );
+    }
+}
+
+export async function saveBingApiKeyForAccount(account: AccountConfig, apiKey: string): Promise<void> {
+    if (!apiKey.trim()) throw new Error('Bing API key cannot be empty.');
+    try {
+        await writeCredential(account, 'bing-api', apiKey.trim());
+    } catch (error) {
+        throw new Error(
+            `Could not store the Bing API key in the OS keychain. ` +
+            `No file fallback was written. Cause: ${(error as Error).message}`
+        );
+    }
+
+    delete account.apiKey;
+    await updateAccount(account);
+}
+
 export async function getBingClient(siteUrl?: string, accountId?: string): Promise<BingClient> {
     // 1. Resolve Account
-    let apiKey: string | undefined;
+    let apiKey: string | null | undefined;
     let cacheKey: string;
 
     if (accountId) {
@@ -220,12 +262,12 @@ export async function getBingClient(siteUrl?: string, accountId?: string): Promi
         if (!account || account.engine !== 'bing') {
             throw new Error(`Bing account ${accountId} not found.`);
         }
-        apiKey = account.apiKey;
+        apiKey = await loadBingApiKeyForAccount(account);
         cacheKey = account.id;
     } else {
         try {
             const account = await resolveAccount(siteUrl || '', 'bing');
-            apiKey = account.apiKey;
+            apiKey = await loadBingApiKeyForAccount(account);
             cacheKey = account.id;
         } catch (error) {
             // Fallback to environment variable for legacy support if resolution fails or no site specified

@@ -22,7 +22,7 @@ Common setups include:
 Run the setup wizard for each account you want to add:
 
 ```bash
-npx search-console-mcp setup
+node dist/index.js setup
 ```
 
 Choose Google or Bing, complete the login, and give the account a name. Repeat for each account.
@@ -43,6 +43,8 @@ You don't need to specify which account to use — it's handled for you.
 
 ## Upgrading from an Older Version
 
-If you used Search Console MCP before v1.12, your existing credentials will still work. The server automatically detects tokens and API keys from previous versions — no action needed on your part.
+If you used an upstream release before this fork, legacy OAuth tokens and Bing
+keys are migrated into the OS keychain on first use. Migration fails closed when
+the keychain is unavailable; no new file fallback is written.
 
 If you'd like to manage those older accounts (rename them, restrict sites), simply run the setup wizard again and it will bring them into the new system.
